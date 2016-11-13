@@ -1,6 +1,10 @@
 import os
+from datetime import datetime
+from dateutil import parser as datetime_parser
+from dateutil.tz import tzutc
 from flask import Flask, url_for, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
+from utils import split_url
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, '../data.sqlite')
@@ -22,17 +26,21 @@ class Customer(db.Model):
     __tablename__ = 'customers'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), index=True)
+    # customer has many orders
+    orders = db.relationship('Order', backref='customer', lazy='dynamic')
 
     # getting the url of a resource
     def get_url(self):
         # url_for  method is used to generate the urls
         return url_for('get_customer', id=self.id, _external=True)
 
-    # generate the json representation
+    # generate the json representation for a customer
     def export_data(self, data):
         return {
             'self_url': self.get_url,
-            'name': self.name
+            'name': self.name,
+            'orders_url': url_for('get_customer_orders', id=self.id,
+                                  _external=True)
         }
 
     # creating a new resource and the client is sending a json representation
@@ -43,6 +51,32 @@ class Customer(db.Model):
         # incase name is missing
         except KeyError as e:
             raise ValidationError('Invalid customer: missing ' + e.args[0])
+        return self
+
+class Product(db.Model):
+    __tablename__ = 'products'
+    id = db.Column(db.Integer,primary_key=True)
+    name = db.Column(db.String(64),index=True)
+    items = db.relationship('Item', backref='product',lazy='dynamic')
+
+    # get url of a product
+    def get_url(self):
+        return url_for('get_product', id=self.id, _external=True)
+
+    # generate the json representation for a product
+    def export_data(self):
+        return {
+            'self_url': self.get_url(),
+            'name': self.name
+        }
+
+    # creating a new product
+    def import_data(self, data):
+        try:
+            self.name = data['name']
+        # incase name is not passed
+        except KeyError as e:
+            raise ValidationError('Invalid product: missing ' +e.args[0])
         return self
 
 # get a collection of customers
